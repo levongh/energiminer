@@ -102,6 +102,12 @@ void MinerCLI::ParseCommandLine(int argc, char** argv)
         ->group(CommonGroup);
 #endif
 #if ETH_ETHASHCL
+    int clKernel = -1;
+    app.add_option("--cl-kernel", clKernel,
+            "Ignored parameter. Kernel is auto-selected.", true)
+        ->group(OpenCLGroup)
+        ->check(CLI::Range(2));
+
     app.add_option("--opencl-platform", m_openclPlatform,
             "Use OpenCL platform n", true)
         ->group(OpenCLGroup);
@@ -110,19 +116,22 @@ void MinerCLI::ParseCommandLine(int argc, char** argv)
             "Select list of devices to mine on (default: use all available)")
         ->group(OpenCLGroup);
 
-    app.add_set("--cl-parallel-hash", m_openclThreadsPerHash, {1, 2, 4, 8},
-            "Set the number of threads per hash", true)
+    int openclThreadsPerHash = -1;
+    app.add_set("--cl-parallel-hash", openclThreadsPerHash, {1, 2, 4, 8},
+            "ignored parameter", true)
         ->group(OpenCLGroup);
 
     app.add_option("--cl-global-work", m_globalWorkSizeMultiplier,
-            "Set the global work size multipler. Specify negative value for automatic scaling based on # of compute units", true)
+            "Set the global work size multipler.", true)
         ->group(OpenCLGroup);
 
-
-    app.add_option("--cl-local-work", m_localWorkSize,
+    app.add_set("--cl-local-work", m_localWorkSize, {64, 128, 192, 256},
             "Set the local work size", true)
-        ->group(OpenCLGroup)
-        ->check(CLI::Range(32, 99999));
+        ->group(OpenCLGroup);
+
+    app.add_flag("--cl-nobinary", m_noBinary,
+            "Don't attempt to load binary kernel")
+        ->group(OpenCLGroup);
 #endif
 #if ETH_ETHASHCUDA
     app.add_option("--cuda-grid-size", m_cudaGridSize,
@@ -255,6 +264,13 @@ void MinerCLI::ParseCommandLine(int argc, char** argv)
         exit(-1);
     }
 
+#if ETH_ETHASHCL
+    if (clKernel >= 0)
+        clog << "--cl-kernel ignored. Kernel is auto-selected\n";
+    if (openclThreadsPerHash >= 0)
+        clog << "--cl-parallel-hash ignored. No longer applies\n";
+#endif
+
     if (hwmon_opt->count()) {
         m_show_hwmonitors = true;
         if (hwmon)
@@ -369,7 +385,6 @@ void MinerCLI::execute()
             OpenCLMiner::setDevices(m_openclDevices, m_openclDeviceCount);
             m_miningThreads = m_openclDeviceCount;
         }
-        OpenCLMiner::setThreadsPerHash(m_openclThreadsPerHash);
         if (!OpenCLMiner::configureGPU(
                     m_localWorkSize,
                     m_globalWorkSizeMultiplier,
@@ -378,7 +393,8 @@ void MinerCLI::execute()
                     m_dagLoadMode,
                     m_dagCreateDevice,
                     m_noEval,
-                    m_exit))
+                    m_exit,
+                    m_noBinary))
         {
             stop_io_service();
             exit(1);
