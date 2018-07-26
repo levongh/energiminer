@@ -22,7 +22,10 @@ using namespace energi;
 
 unsigned OpenCLMiner::s_workgroupSize = OpenCLMiner::c_defaultLocalWorkSize;
 unsigned OpenCLMiner::s_initialGlobalWorkSize = OpenCLMiner::c_defaultGlobalWorkSizeMultiplier * OpenCLMiner::c_defaultLocalWorkSize;
-constexpr size_t c_maxSearchResults = 255;
+// WARNING: Do not change the value of the following constant
+// unless you are prepared to make the neccessary adjustments
+// to the assembly code for the binary kernels.
+constexpr size_t c_maxSearchResults = 15;
 
 struct CLChannel: public LogChannel
 {
@@ -267,6 +270,21 @@ OpenCLMiner::~OpenCLMiner()
     onSetWork();
 }
 
+// NOTE: The following struct must match the one defined in
+// ethash.cl
+struct SearchResults
+{
+    struct
+    {
+        uint32_t gid;
+        // Can't use h256 data type here since h256 contains
+        // more than raw data. Kernel returns raw mix hash.
+        uint32_t mix[8];
+        uint32_t pad[7];  // pad to 16 words for easy indexing
+    } rslt[c_maxSearchResults];
+    uint32_t count;
+};
+
 unsigned OpenCLMiner::getNumDevices()
 {
     std::vector<cl::Platform> platforms = getPlatforms();
@@ -348,9 +366,6 @@ bool OpenCLMiner::configureGPU(
     s_exit = _exit;
     s_noBinary = _nobinary;
 
-    if (_noeval)
-        cwarn << "--no-eval not yet supported for AMD.";
-
     s_platformId = _platformId;
     _localWorkSize = ((_localWorkSize + 7) / 8) * 8;
     s_workgroupSize = _localWorkSize;
@@ -401,6 +416,8 @@ void OpenCLMiner::trun()
     //uint64_t const nonceSegment = static_cast<uint64_t>(m_index) << (64 - 4);
     Work current_work; // Here we need current work as to initialize gpu
     try {
+        // Read results.
+        SearchResults results;
         while (!shouldStop()) {
             if (is_mining_paused()) {
                 std::this_thread::sleep_for(std::chrono::seconds(3));
@@ -438,7 +455,8 @@ void OpenCLMiner::trun()
 
                 // Update header constant buffer.
                 m_queue.enqueueWriteBuffer(m_header[0], CL_FALSE, 0, hash_header.hash_size, &hash_header.b[0]);
-                m_queue.enqueueWriteBuffer(m_searchBuffer[0], CL_FALSE, 0, sizeof(c_zero), &c_zero);
+                // zero the result count
+                m_queue.enqueueWriteBuffer(m_searchBuffer[0], CL_FALSE, offsetof(SearchResults, count), sizeof(c_zero), &c_zero);
 
                 //TODO NEED TO MOVE
                 //m_searchKernel.setArg(0, m_searchBuffer[0]);  // Supply output buffer to kernel.
@@ -457,7 +475,6 @@ void OpenCLMiner::trun()
                 m_searchKernel.setArg(3, m_dagItems);
                 m_searchKernel.setArg(5, target);
                 m_searchKernel.setArg(6, 0xffffffff);
-                m_searchKernel.setArg(7, 1);
             }
 
             // Run the kernel.
@@ -483,30 +500,35 @@ void OpenCLMiner::trun()
             m_queue.enqueueNDRangeKernel(m_searchKernel, cl::NullRange, m_globalWorkSize, m_workgroupSize);
 
             // Read results.
-            uint32_t count, gids[c_maxSearchResults];
+            m_queue.enqueueReadBuffer(m_searchBuffer[0], CL_TRUE,
+                    c_maxSearchResults * sizeof(results.rslt[0]), sizeof(results.count),
+                    &results.count);
 
-            m_queue.enqueueReadBuffer(m_searchBuffer[0], CL_TRUE, c_maxSearchResults * sizeof(uint32_t), sizeof(count), &count);
-
-            if (count)
+            if (results.count)
             {
-                m_queue.enqueueReadBuffer(m_searchBuffer[0], CL_TRUE, 0, count * sizeof(uint32_t), gids);
+                m_queue.enqueueReadBuffer(m_searchBuffer[0], CL_TRUE, 0,
+                        results.count * sizeof(results.rslt[0]), &results);
                 // Reset search buffer if any solution found.
-                m_queue.enqueueWriteBuffer(m_searchBuffer[0], CL_FALSE, c_maxSearchResults * sizeof(uint32_t), sizeof(c_zero), &c_zero);
+                m_queue.enqueueWriteBuffer(m_searchBuffer[0], CL_FALSE, offsetof(SearchResults, count), sizeof(c_zero), &c_zero);
             }
 
 
             // Report results while the kernel is running.
             // It takes some time because proof of work must be re-evaluated on CPU.
-            cllog << "count: " << count;
-            for (uint32_t i = 0; i < count; ++i) {
-                current_work.nNonce = startNonce + gids[1];
+            for (uint32_t i = 0; i < results.count; ++i) {
+                current_work.nNonce = startNonce + results.rslt[i].gid;
                 auto const powHash = GetPOWHash(current_work);
-                if (UintToArith256(powHash) <= current_work.hashTarget) {
-                    cllog << name() << "Submitting block blockhash: " << current_work.GetHash().ToString() << " height: " << current_work.nHeight << "nonce: " << current_work.nNonce;
+                if (s_noeval) {
                     Solution solution(current_work, current_work.getSecondaryExtraNonce());
                     m_plant.submitProof(solution);
                 } else {
-                    cwarn << name() << "CL Miner proposed invalid solution" << current_work.GetHash().ToString() << "nonce: " << current_work.nNonce;
+                    if (UintToArith256(powHash) <= current_work.hashTarget) {
+                        cllog << name() << "Submitting block blockhash: " << current_work.GetHash().ToString() << " height: " << current_work.nHeight << "nonce: " << current_work.nNonce;
+                        Solution solution(current_work, current_work.getSecondaryExtraNonce());
+                        m_plant.submitProof(solution);
+                    } else {
+                        cwarn << name() << "CL Miner proposed invalid solution" << current_work.GetHash().ToString() << "nonce: " << current_work.nNonce;
+                    }
                 }
             }
             current_work.startNonce = startNonce;
@@ -717,6 +739,10 @@ bool OpenCLMiner::init_dag(uint32_t height)
         addDefinition(code, "MAX_OUTPUTS", c_maxSearchResults);
         addDefinition(code, "PLATFORM", platformId);
         addDefinition(code, "COMPUTE", computeCapability);
+        if (platformId == OPENCL_PLATFORM_CLOVER) {
+            addDefinition(code, "LEGACY", 1);
+            s_noBinary = true;
+        }
 
         // create miner OpenCL program
         cl::Program::Sources sources{{code.data(), code.size()}};
@@ -823,7 +849,6 @@ bool OpenCLMiner::init_dag(uint32_t height)
         m_searchKernel.setArg(2, m_dag[0]);
         m_searchKernel.setArg(3, m_dagItems);
         m_searchKernel.setArg(6, ~0u);
-        m_searchKernel.setArg(7, 1u);  // Number of iterations
 
         // create mining buffers
         ETHCL_LOG("Creating mining buffer");
