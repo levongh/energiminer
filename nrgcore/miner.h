@@ -56,7 +56,7 @@ public:
         onSetWork();
     }
 
-    uint32_t hashCount() const
+    uint64_t hashCount() const
     {
         return m_hashCount.load(std::memory_order_relaxed);
     }
@@ -108,7 +108,7 @@ protected:
         return m_work;
     }
 
-    void addHashCount(uint32_t _n)
+    void addHashCount(uint64_t _n)
     {
         m_hashCount.fetch_add(_n, std::memory_order_relaxed);
     }
@@ -130,7 +130,7 @@ protected:
 
 private:
     MiningPause m_mining_paused;
-    std::atomic<uint32_t> m_hashCount;
+    std::atomic<uint64_t> m_hashCount;
 	Work m_work;
 	mutable std::mutex x_work;
 };

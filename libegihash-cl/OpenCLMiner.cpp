@@ -25,7 +25,7 @@ unsigned OpenCLMiner::s_initialGlobalWorkSize = OpenCLMiner::c_defaultGlobalWork
 // WARNING: Do not change the value of the following constant
 // unless you are prepared to make the neccessary adjustments
 // to the assembly code for the binary kernels.
-constexpr size_t c_maxSearchResults = 15;
+constexpr size_t c_maxSearchResults = 255;
 
 struct CLChannel: public LogChannel
 {
@@ -458,10 +458,6 @@ void OpenCLMiner::trun()
                 // zero the result count
                 m_queue.enqueueWriteBuffer(m_searchBuffer[0], CL_FALSE, offsetof(SearchResults, count), sizeof(c_zero), &c_zero);
 
-                //TODO NEED TO MOVE
-                //m_searchKernel.setArg(0, m_searchBuffer[0]);  // Supply output buffer to kernel.
-                //m_searchKernel.setArg(4, target);
-
                 //startNonce = nonceSegment;
                 if (current.exSizeBits >= 0) {
                      // This can support up to 2^c_log2MaxMiners devices.
@@ -486,14 +482,13 @@ void OpenCLMiner::trun()
                     c_maxSearchResults * sizeof(results.rslt[0]), sizeof(results.count),
                     &results.count);
 
-            if (results.count)
-            {
+            if (results.count) {
                 m_queue.enqueueReadBuffer(m_searchBuffer[0], CL_TRUE, 0,
                         results.count * sizeof(results.rslt[0]), &results);
                 // Reset search buffer if any solution found.
-                m_queue.enqueueWriteBuffer(m_searchBuffer[0], CL_TRUE, offsetof(SearchResults, count), sizeof(c_zero), &c_zero);
-            }
+                m_queue.enqueueWriteBuffer(m_searchBuffer[0], CL_FALSE, offsetof(SearchResults, count), sizeof(c_zero), &c_zero);
 
+            }
 
             // Report results while the kernel is running.
             // It takes some time because proof of work must be re-evaluated on CPU.
@@ -503,11 +498,13 @@ void OpenCLMiner::trun()
                 if (s_noeval) {
                     Solution solution(current, current.getSecondaryExtraNonce());
                     m_plant.submitProof(solution);
+                    break;
                 } else {
                     if (UintToArith256(powHash) <= current.hashTarget) {
                         cllog << name() << "Submitting block blockhash: " << current.GetHash().ToString() << " height: " << current.nHeight << "nonce: " << current.nNonce;
                         Solution solution(current, current.getSecondaryExtraNonce());
                         m_plant.submitProof(solution);
+                        break;
                     } else {
                         cwarn << name() << "CL Miner proposed invalid solution" << current.GetHash().ToString() << "nonce: " << current.nNonce;
                     }
@@ -517,7 +514,6 @@ void OpenCLMiner::trun()
             // Increase start nonce for following kernel execution.
             startNonce += m_globalWorkSize;
             addHashCount(m_globalWorkSize);
-            m_queue.finish();
         }
         m_queue.finish();
     } catch (cl::Error const& _e) {
@@ -626,7 +622,6 @@ bool OpenCLMiner::init_dag(uint32_t height)
 
         nrghash::cache_t  cache = nrghash::cache_t(height);
         uint64_t dagSize = nrghash::dag_t::get_full_size(height);//dag->size();
-        const auto lightNumItems = (unsigned)(cache.data().size());
         m_dagItems = (unsigned)(dagSize / nrghash::constants::MIX_BYTES);
         // create buffer for dag
         std::vector<uint32_t> vData;

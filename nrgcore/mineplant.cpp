@@ -180,7 +180,7 @@ void MinePlant::collectHashRate()
         auto minerHashCount = miner->hashCount();
         miner->resetHashCount();
         p.hashes += minerHashCount;
-        p.minersHashes.insert(std::make_pair<std::string, uint64_t>(miner->name(), uint64_t(minerHashCount)));
+        p.minersHashes.insert(std::make_pair<std::string, uint64_t>(miner->name(), std::move(minerHashCount)));
     }
     if (p.hashes > 0) {
         m_lastProgresses.push_back(p);
