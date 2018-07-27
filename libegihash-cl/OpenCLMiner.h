@@ -58,8 +58,6 @@ public:
 
     virtual ~OpenCLMiner() override;
 
-    std::tuple<bool, cl::Device, int, int, std::string> getDeviceInfo(int index);
-
     static unsigned instances()
     {
         return s_numInstances > 0 ? s_numInstances : 1;

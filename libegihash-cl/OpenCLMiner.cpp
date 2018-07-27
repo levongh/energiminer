@@ -414,7 +414,7 @@ void OpenCLMiner::trun()
     // this gives each miner a pretty big range of nonces, supporting up to 16 miners.
     // TODO: get smarter about how many miners we support.
     //uint64_t const nonceSegment = static_cast<uint64_t>(m_index) << (64 - 4);
-    Work current_work; // Here we need current work as to initialize gpu
+    Work current; // Here we need current work as to initialize gpu
     try {
         // Read results.
         SearchResults results;
@@ -434,7 +434,7 @@ void OpenCLMiner::trun()
             } else {
                 //cllog << name() << "Valid work.";
             }
-            if (current_work != work) {
+            if (current != work) {
                 if (!m_dagLoaded || ((work.nHeight / nrghash::constants::EPOCH_LENGTH) != (m_lastHeight / nrghash::constants::EPOCH_LENGTH))) {
                     if (s_dagLoadMode == DAG_LOAD_MODE_SEQUENTIAL) {
                         while (s_dagLoadIndex < m_index)
@@ -445,12 +445,12 @@ void OpenCLMiner::trun()
                     m_dagLoaded = true;
                 }
                 m_lastHeight = work.nHeight;
-                current_work = work;
-                energi::CBlockHeaderTruncatedLE truncatedBlockHeader(current_work);
+                current = work;
+                energi::CBlockHeaderTruncatedLE truncatedBlockHeader(current);
                 nrghash::h256_t hash_header(&truncatedBlockHeader, sizeof(truncatedBlockHeader));
 
                 // Upper 64 bits of the boundary.
-                const uint64_t target = *reinterpret_cast<uint64_t const *>((current_work.hashTarget >> 192).data());
+                const uint64_t target = *reinterpret_cast<uint64_t const *>((current.hashTarget >> 192).data());
                 assert(target > 0);
 
                 // Update header constant buffer.
@@ -463,9 +463,9 @@ void OpenCLMiner::trun()
                 //m_searchKernel.setArg(4, target);
 
                 //startNonce = nonceSegment;
-                if (current_work.exSizeBits >= 0) {
+                if (current.exSizeBits >= 0) {
                      // This can support up to 2^c_log2MaxMiners devices.
-                    startNonce = current_work.startNonce | ((uint64_t)m_index << (64 - LOG2_MAX_MINERS - current_work.exSizeBits));
+                    startNonce = current.startNonce | ((uint64_t)m_index << (64 - LOG2_MAX_MINERS - current.exSizeBits));
                 } else {
                     startNonce = get_start_nonce();
                 }
@@ -476,24 +476,6 @@ void OpenCLMiner::trun()
                 m_searchKernel.setArg(5, target);
                 m_searchKernel.setArg(6, 0xffffffff);
             }
-
-            // Run the kernel.
-            //m_searchKernel.setArg(3, startNonce);
-            //m_queue.enqueueNDRangeKernel(m_searchKernel, cl::NullRange, globalWorkSize_, workgroupSize_);
-
-            // Read results.
-            // TODO: could use pinned host pointer instead.
-            //uint32_t results[c_maxSearchResults + 1] = { 0 };
-            //m_queue.enqueueReadBuffer(m_searchBuffer, CL_TRUE, 0, sizeof(results), &results);
-
-            //uint64_t nonce = 0;
-            //if (results[0] > 0) {
-            //    // Ignore results except the first one.
-            //    nonce = startNonce + results[1];
-            //    // Reset search buffer if any solution found.
-            //    m_queue.enqueueWriteBuffer(m_searchBuffer, CL_TRUE, 0, sizeof(c_zero), &c_zero);
-            //}
-
 
             // Run the kernel.
             m_searchKernel.setArg(4, startNonce);
@@ -509,32 +491,33 @@ void OpenCLMiner::trun()
                 m_queue.enqueueReadBuffer(m_searchBuffer[0], CL_TRUE, 0,
                         results.count * sizeof(results.rslt[0]), &results);
                 // Reset search buffer if any solution found.
-                m_queue.enqueueWriteBuffer(m_searchBuffer[0], CL_FALSE, offsetof(SearchResults, count), sizeof(c_zero), &c_zero);
+                m_queue.enqueueWriteBuffer(m_searchBuffer[0], CL_TRUE, offsetof(SearchResults, count), sizeof(c_zero), &c_zero);
             }
 
 
             // Report results while the kernel is running.
             // It takes some time because proof of work must be re-evaluated on CPU.
             for (uint32_t i = 0; i < results.count; ++i) {
-                current_work.nNonce = startNonce + results.rslt[i].gid;
-                auto const powHash = GetPOWHash(current_work);
+                current.nNonce = startNonce + results.rslt[i].gid;
+                auto const powHash = GetPOWHash(current);
                 if (s_noeval) {
-                    Solution solution(current_work, current_work.getSecondaryExtraNonce());
+                    Solution solution(current, current.getSecondaryExtraNonce());
                     m_plant.submitProof(solution);
                 } else {
-                    if (UintToArith256(powHash) <= current_work.hashTarget) {
-                        cllog << name() << "Submitting block blockhash: " << current_work.GetHash().ToString() << " height: " << current_work.nHeight << "nonce: " << current_work.nNonce;
-                        Solution solution(current_work, current_work.getSecondaryExtraNonce());
+                    if (UintToArith256(powHash) <= current.hashTarget) {
+                        cllog << name() << "Submitting block blockhash: " << current.GetHash().ToString() << " height: " << current.nHeight << "nonce: " << current.nNonce;
+                        Solution solution(current, current.getSecondaryExtraNonce());
                         m_plant.submitProof(solution);
                     } else {
-                        cwarn << name() << "CL Miner proposed invalid solution" << current_work.GetHash().ToString() << "nonce: " << current_work.nNonce;
+                        cwarn << name() << "CL Miner proposed invalid solution" << current.GetHash().ToString() << "nonce: " << current.nNonce;
                     }
                 }
             }
-            current_work.startNonce = startNonce;
+            current.startNonce = startNonce;
             // Increase start nonce for following kernel execution.
             startNonce += m_globalWorkSize;
             addHashCount(m_globalWorkSize);
+            m_queue.finish();
         }
         m_queue.finish();
     } catch (cl::Error const& _e) {
@@ -542,78 +525,6 @@ void OpenCLMiner::trun()
         if(s_exit)
             exit(1);
     }
-}
-
-
-std::tuple<bool, cl::Device, int, int, std::string> OpenCLMiner::getDeviceInfo(int index)
-{
-    auto failResult = std::make_tuple(false, cl::Device(), 0, 0, "");
-    std::vector<cl::Platform> platforms = getPlatforms();
-    if (platforms.empty()) {
-        return failResult;
-    }
-
-    // use selected platform
-    unsigned platformIdx = std::min<unsigned>(s_platformId, platforms.size() - 1);
-    std::string platformName = platforms[platformIdx].getInfo<CL_PLATFORM_NAME>();
-    ETHCL_LOG("Platform: " << platformName);
-
-    int platformId = OPENCL_PLATFORM_UNKNOWN;
-    if (platformName == "NVIDIA CUDA") {
-        platformId = OPENCL_PLATFORM_NVIDIA;
-        m_hwmoninfo.deviceType = HwMonitorInfoType::NVIDIA;
-        m_hwmoninfo.indexSource = HwMonitorIndexSource::OPENCL;
-    } else if (platformName == "AMD Accelerated Parallel Processing") {
-        platformId = OPENCL_PLATFORM_AMD;
-        m_hwmoninfo.deviceType = HwMonitorInfoType::AMD;
-        m_hwmoninfo.indexSource = HwMonitorIndexSource::OPENCL;
-    } else if (platformName == "Clover") {
-        platformId = OPENCL_PLATFORM_CLOVER;
-    }
-
-    // get GPU device of the default platform
-    std::vector<cl::Device> devices = getDevices(platforms, platformIdx);
-    if (devices.empty()) {
-        ETHCL_LOG("No OpenCL devices found.");
-        return failResult;
-    }
-
-    // use selected device
-    int idx = index % devices.size();
-    unsigned deviceId = s_devices[idx] > -1 ? s_devices[idx] : index;
-    m_hwmoninfo.deviceIndex = deviceId % devices.size();
-    cl::Device& device = devices[deviceId % devices.size()];
-    std::string device_version = device.getInfo<CL_DEVICE_VERSION>();
-    std::string device_name = device.getInfo<CL_DEVICE_NAME>();
-    ETHCL_LOG("Device:   " << device_name << " / " << device_version);
-
-    std::string clVer = device_version.substr(7, 3);
-
-    if (clVer == "1.0" || clVer == "1.1") {
-        if (platformId == OPENCL_PLATFORM_CLOVER) {
-            ETHCL_LOG("OpenCL " << clVer << " not supported, but platform Clover might work nevertheless. USE AT OWN RISK!");
-        } else {
-            ETHCL_LOG("OpenCL " << clVer << " not supported - minimum required version is 1.2");
-            return failResult;
-        }
-    }
-
-    char options[256];
-    int computeCapability = 0;
-    if (platformId == OPENCL_PLATFORM_NVIDIA) {
-        cl_uint computeCapabilityMajor;
-        cl_uint computeCapabilityMinor;
-        clGetDeviceInfo(device(), CL_DEVICE_COMPUTE_CAPABILITY_MAJOR_NV, sizeof(cl_uint), &computeCapabilityMajor, NULL);
-        clGetDeviceInfo(device(), CL_DEVICE_COMPUTE_CAPABILITY_MINOR_NV, sizeof(cl_uint), &computeCapabilityMinor, NULL);
-
-        computeCapability = computeCapabilityMajor * 10 + computeCapabilityMinor;
-        int maxregs = computeCapability >= 35 ? 72 : 63;
-        sprintf(options, "-cl-nv-maxrregcount=%d", maxregs);
-    } else {
-        sprintf(options, "%s", "");
-    }
-
-    return std::make_tuple(true, device, platformId, computeCapability, std::string(options));
 }
 
 bool OpenCLMiner::init_dag(uint32_t height)
@@ -853,7 +764,7 @@ bool OpenCLMiner::init_dag(uint32_t height)
         // create mining buffers
         ETHCL_LOG("Creating mining buffer");
         m_searchBuffer.clear();
-        m_searchBuffer.push_back(cl::Buffer(m_context, CL_MEM_WRITE_ONLY, (c_maxSearchResults + 1) * sizeof(uint32_t)));
+        m_searchBuffer.push_back(cl::Buffer(m_context, CL_MEM_WRITE_ONLY, sizeof(SearchResults)));
 
         m_dagKernel.setArg(1, m_light[0]);
         m_dagKernel.setArg(2, m_dag[0]);
