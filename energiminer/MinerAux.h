@@ -29,7 +29,7 @@
 #include "primitives/solution.h"
 #include "primitives/work.h"
 #include "nrgcore/mineplant.h"
-#include "BuildInfo.h"
+#include <energiminer/buildinfo.h>
 #include <protocol/PoolURI.h>
 
 
@@ -114,17 +114,10 @@ public:
     void stop_io_service();
 
     void ParseCommandLine(int argc,char** argv);
-    void version() const
-    {
-        cout << "v" << ENERGI_PROJECT_VERSION << endl;
-        cout << "Build: " << ENERGI_BUILD_PLATFORM << "/" << ENERGI_BUILD_TYPE << endl;
-    }
 
 	void execute();
 
 private:
-    void doSimulation(int difficulty = 20);
-
     /*
        doMiner function starts Plant and in farm it starts miners intended to mine e.g. CPUMiner And/or Gpuminer
        doMiner runs a loop where,

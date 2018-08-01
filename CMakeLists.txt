@@ -1,60 +1,28 @@
-cmake_minimum_required(VERSION 3.3)
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+cmake_minimum_required(VERSION 3.5)
 
-set(CMAKE_TOOLCHAIN_FILE ${CMAKE_SOURCE_DIR}/cmake/toolchain.cmake CACHE FILEPATH "CMake toolchain file")
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CONFIGURATION_TYPES Release RelWithDebInfo)
-set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type on single-configuration generators")
+include(cmake/cable/bootstrap.cmake)
 
-set(HUNTER_CONFIGURATION_TYPES Release)
-set(HUNTER_CACHE_SERVERS "https://github.com/ethereum/hunter-cache")
+include(CableBuildInfo)
+include(CableBuildType)
+include(CableToolchains)
 include(HunterGate)
+
+include(defaults/HunterCacheServers)
+
+cable_configure_toolchain(DEFAULT cxx11)
+
+set(HUNTER_CONFIGURATION_TYPES Release CACHE STRING "Build type of Hunter packages")
+set(HUNTER_JOBS_NUMBER 6 CACHE STRING "Number of parallel builds used by Hunter")
 HunterGate(
-    URL "https://github.com/ruslo/hunter/archive/v0.21.9.tar.gz"
-    SHA1 "0056188988906abb63a06c6f1aaef01832c62b74"
+    URL "https://github.com/ruslo/hunter/archive/v0.23.6.tar.gz"
+    SHA1 "951e8daf57a51708b0e6a00cab342a042db57a2f"
     LOCAL
 )
-
-if(HUNTER_ENABLED)
-	find_package(PythonInterp)
-	if(PYTHONINTERP_FOUND)
-		hunter_gate_self(
-			"${HUNTER_CACHED_ROOT}"
-			"${HUNTER_VERSION}"
-			"${HUNTER_SHA1}"
-			hunter_dir
-		)
-		set(hunter_upload_script "${hunter_dir}/maintenance/upload-cache-to-github.py")
-		set(hunter_cache_dir "${HUNTER_GATE_ROOT}/_Base/Cache")
-		set(hunter_tmp_dir "${HUNTER_GATE_ROOT}/tmp")
-		add_custom_target(
-			hunter_upload_cache
-			${PYTHON_EXECUTABLE} ${hunter_upload_script}
-			--username hunter-cache-bot
-			--repo-owner ethereum
-			--repo hunter-cache
-			--cache-dir ${hunter_cache_dir}
-			--temp-dir ${hunter_tmp_dir}
-		)
-	endif()
-endif()
-
 
 project(energiminer)
 set(PROJECT_VERSION 2.0.0)
 
-# link_directories interprate relative paths with respect to CMAKE_CURRENT_SOURCE_DIR
-cmake_policy(SET CMP0015 NEW)
-
-# let cmake autolink dependencies on windows
-# it's specified globally, cause qt libraries requires that on windows and they are also found globally
-cmake_policy(SET CMP0020 NEW)
-
-# 3.1 and above
-cmake_policy(SET CMP0054 NEW)
-
-######################################################################################################
-
+cable_set_build_type(DEFAULT Release CONFIGURATION_TYPES Release RelWithDebInfo)
 option(ETHASHCL "Build with OpenCL mining" ON)
 option(ETHASHCUDA "Build with CUDA mining" OFF)
 option(BINKERN "Install AMD binary kernels" ON)
@@ -71,42 +39,6 @@ function(configureProject)
         add_definitions(-DBIN_KERN)
     endif()
 endfunction()
-
-function(createBuildInfo)
-	# Set build platform; to be written to BuildInfo.h
-	set(ETH_BUILD_PLATFORM "${CMAKE_SYSTEM_NAME}")
-	if (CMAKE_COMPILER_IS_MINGW)
-		set(ETH_BUILD_PLATFORM "${ETH_BUILD_PLATFORM}/mingw")
-	elseif (CMAKE_COMPILER_IS_MSYS)
-		set(ETH_BUILD_PLATFORM "${ETH_BUILD_PLATFORM}/msys")
-	elseif (CMAKE_COMPILER_IS_GNUCXX)
-		set(ETH_BUILD_PLATFORM "${ETH_BUILD_PLATFORM}/g++")
-	elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-		set(ETH_BUILD_PLATFORM "${ETH_BUILD_PLATFORM}/msvc")
-	elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-		set(ETH_BUILD_PLATFORM "${ETH_BUILD_PLATFORM}/clang")
-	else ()
-		set(ETH_BUILD_PLATFORM "${ETH_BUILD_PLATFORM}/unknown")
-	endif ()
-
-	#cmake build type may be not specified when using msvc
-	if (CMAKE_BUILD_TYPE)
-		set(_cmake_build_type ${CMAKE_BUILD_TYPE})
-	else()
-		set(_cmake_build_type "${CMAKE_CFG_INTDIR}")
-	endif()
-
-	# Generate header file containing useful build information
-	add_custom_target(BuildInfo.h ALL
-		WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-		COMMAND ${CMAKE_COMMAND} -DETH_SOURCE_DIR="${CMAKE_SOURCE_DIR}" -DETH_DST_DIR="${CMAKE_BINARY_DIR}"
-			-DETH_BUILD_TYPE="${_cmake_build_type}" -DETH_BUILD_PLATFORM="${ETH_BUILD_PLATFORM}"
-			-DPROJECT_VERSION="${PROJECT_VERSION}"
-			-P cmake/scripts/buildinfo.cmake
-		)
-	include_directories(${CMAKE_CURRENT_BINARY_DIR})
-endfunction()
-
 
 hunter_add_package(Boost COMPONENTS system filesystem)
 find_package(Boost CONFIG REQUIRED COMPONENTS system filesystem)
@@ -133,8 +65,12 @@ message("-----------------------------------------------------------------------
 message("")
 
 include(EthCompilerSettings)
+#TODO
+if(UNIX AND NOT APPLE)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++")
+endif()
 
-createBuildInfo()
+cable_add_buildinfo_library(PROJECT_NAME ${PROJECT_NAME})
 
 add_subdirectory(protocol)
 add_subdirectory(primitives)
@@ -160,17 +96,7 @@ if(WIN32)
 else()
 	set(CPACK_GENERATOR TGZ)
 endif()
-set(CPACK_PACKAGE_FILE_NAME ${PROJECT_NAME}-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME})
+set(CPACK_PACKAGE_FILE_NAME ${PROJECT_NAME})
 set(CPACK_PACKAGE_CHECKSUM SHA256)
 set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY FALSE)
 include(CPack)
-
-
-# Export some variables for CIs
-if(PROJECT_VERSION MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)$")
-	set(PROJECT_VERSION_IS_PRERELEASE false)
-else()
-	set(PROJECT_VERSION_IS_PRERELEASE true)
-endif()
-configure_file(cmake/variables.sh.in variables.sh)
-configure_file(cmake/variables.ps1.in variables.ps1)

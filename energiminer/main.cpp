@@ -21,7 +21,7 @@
  */
 
 #include "MinerAux.h"
-#include "BuildInfo.h"
+#include <energiminer/buildinfo.h>
 
 #include <thread>
 #include <fstream>

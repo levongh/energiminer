@@ -1,4 +1,4 @@
-#include "BuildInfo.h"
+#include <energiminer/buildinfo.h>
 
 #include "StratumClient.h"
 
@@ -419,8 +419,7 @@ void StratumClient::connect_handler(const boost::system::error_code& ec)
 			case 999:
 			case 2:
 				m_conn->SetStratumMode(2, false);
-				jReq["params"].append(
-                        "energiminer " + std::string(ENERGI_PROJECT_VERSION));
+				jReq["params"].append(energiminer_get_buildinfo()->project_name_with_version);
 				jReq["params"].append("EnergiminerStratum/1.0.0");
 				break;
 
@@ -448,8 +447,7 @@ void StratumClient::connect_handler(const boost::system::error_code& ec)
 
                 case StratumClient::ETHEREUMSTRATUM:
 
-                    jReq["params"].append(
-                        "energiminer " + std::string(ENERGI_PROJECT_VERSION));
+                    jReq["params"].append(energiminer_get_buildinfo()->project_name_with_version);
                     jReq["params"].append("EnergiminerStratum/1.0.0");
 
                     break;
@@ -549,7 +547,7 @@ void StratumClient::processReponse(Json::Value& responseObject)
        )
     {
         cwarn << "Pool sent an invalid jsonrpc message ...";
-        cwarn << "Do not blame ethminer for this. Ask pool devs to honor http://www.jsonrpc.org/ specifications ";
+        cwarn << "Do not blame energiminer for this. Ask pool devs to honor http://www.jsonrpc.org/ specifications ";
         cwarn << "Disconnecting ...";
         m_io_service.post(m_io_strand.wrap(boost::bind(&StratumClient::disconnect, this)));
         return;
@@ -858,7 +856,7 @@ void StratumClient::processReponse(Json::Value& responseObject)
             }
         } else if (_method == "client.get_version") {
             jReq["id"] = toString(_id);
-            jReq["result"] = std::string(ENERGI_PROJECT_VERSION);
+            jReq["result"] = energiminer_get_buildinfo()->project_name_with_version;
             if (_rpcVer == 1) {
                 jReq["error"] = Json::Value::null;
             } else if (_rpcVer == 2) {
@@ -919,28 +917,18 @@ void StratumClient::response_timeout_handler(const boost::system::error_code& ec
 
 void StratumClient::submitHashrate(const std::string& rate)
 {
-//	m_rate = rate;
-//	if (!m_submit_hashrate || !isConnected()) {
-//		return;
-//	}
+    if(rate.empty()) {
+        return;
+    }
+	if (!m_submit_hashrate || !isConnected()) {
+		return;
+	}
 
 	// There is no stratum method to submit the hashrate so we use the rpc variant.
 	// Note !!
 	// id = 6 is also the id used by ethermine.org and nanopool to push new jobs
 	// thus we will be in trouble if we want to check the result of hashrate submission
 	// actually change the id from 6 to 9
-
-//	Json::Value jReq;
-//	jReq["id"] = unsigned(9);
-//	jReq["jsonrpc"] = "2.0";
-//	if (m_worker.length()) jReq["worker"] = m_worker;
-//	jReq["method"] = "eth_submitHashrate";
-//	jReq["params"] = Json::Value(Json::arrayValue);
-//	jReq["params"].append(m_rate);
-//	jReq["params"].append("0x" + toString(this->m_submit_hashrate_id));
-//
-//	sendSocketData(jReq);
-
 }
 
 void StratumClient::submitSolution(const Solution& solution)

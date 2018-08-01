@@ -19,3 +19,5 @@ endif()
 if (ETHASHCUDA)
     target_link_libraries(libnrgcore nrghash-cuda libnrghash)
 endif()
+
+target_link_libraries(libnrgcore hwmon)

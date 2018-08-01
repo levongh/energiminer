@@ -6,7 +6,7 @@
  */
 
 #include "libegihash-cl/OpenCLMiner.h"
-#include "libegihash-cl/ethash.h"
+#include "ethash.h"
 
 #include "nrghash/nrghash.h"
 
@@ -569,14 +569,10 @@ bool OpenCLMiner::init_dag(uint32_t height)
         ETHCL_LOG("Device:   " << device_name << " / " << device_version);
 
         std::string clVer = device_version.substr(7, 3);
-        if (clVer == "1.0" || clVer == "1.1")
-        {
-            if (platformId == OPENCL_PLATFORM_CLOVER)
-            {
+        if (clVer == "1.0" || clVer == "1.1") {
+            if (platformId == OPENCL_PLATFORM_CLOVER) {
                 ETHCL_LOG("OpenCL " << clVer << " not supported, but platform Clover might work nevertheless. USE AT OWN RISK!");
-            }
-            else
-            {
+            } else {
                 ETHCL_LOG("OpenCL " << clVer << " not supported - minimum required version is 1.2");
                 return false;
             }
@@ -593,8 +589,7 @@ bool OpenCLMiner::init_dag(uint32_t height)
             computeCapability = computeCapabilityMajor * 10 + computeCapabilityMinor;
             int maxregs = computeCapability >= 35 ? 72 : 63;
             sprintf(options, "-cl-nv-maxrregcount=%d", maxregs);
-        }
-        else {
+        } else {
             sprintf(options, "%s", "");
         }
         // create context
@@ -712,8 +707,7 @@ bool OpenCLMiner::init_dag(uint32_t height)
         //check whether the current dag fits in memory everytime we recreate the DAG
         cl_ulong result = 0;
         device.getInfo(CL_DEVICE_GLOBAL_MEM_SIZE, &result);
-        if (result < dagSize)
-        {
+        if (result < dagSize) {
             cnote <<
                 "OpenCL device " << device_name
                 << " has insufficient GPU memory." << result <<

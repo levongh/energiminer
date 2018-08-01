@@ -245,7 +245,7 @@ void MinerCLI::ParseCommandLine(int argc, char** argv)
         << "    Example 1: stratum1+tcp://tPBQiizBs2tUGfLcM5pQeA6rYYCPyj6czL@<host>:<port/email" << endl
         << "    Example 2: stratum1+tcp://tPBQiizBs2tUGfLcM5pQeA6rYYCPyj6czL@<host>:<port>/<miner name>/email"
         << endl << endl;
-    app.set_footer(ssHelp.str());
+    app.footer(ssHelp.str());
 
     try {
         app.parse(argc, argv);
@@ -253,7 +253,9 @@ void MinerCLI::ParseCommandLine(int argc, char** argv)
             std::cerr << endl << app.help() << endl;
             exit(0);
         } else if (vers) {
-            version();
+            auto* bi = energiminer_get_buildinfo();
+            cerr << "\nethminer " << bi->project_version << "\nBuild: " << bi->system_name << "/"
+                << bi->build_type << "/" << bi->compiler_id << "\n\n";
             exit(0);
         }
     } catch(const CLI::ParseError &e) {
@@ -399,7 +401,7 @@ void MinerCLI::execute()
 
         OpenCLMiner::setNumInstances(m_miningThreads);
 #else
-        cerr << "Selected GPU mining without having compiled with -DETHASHCL=1" << endl;
+        cerr << "Selected GPU mining without having compiled with -DETHASHCL=ON" << endl;
         exit(1);
 #endif
     }
@@ -444,21 +446,19 @@ void MinerCLI::execute()
     signal(SIGINT, MinerCLI::signalHandler);
     signal(SIGTERM, MinerCLI::signalHandler);
 
-    if (m_mode == OperationMode::Benchmark) {
-        //doBenchmark(m_minerExecutionMode, m_benchmarkWarmup, m_benchmarkTrial, m_benchmarkTrials);
-    } else if (m_mode == OperationMode::GBT || m_mode == OperationMode::Stratum) {
-        doMiner();
-    } else if (m_mode == OperationMode::Simulation) {
-        //client = new SimulateClent(20, m_benchmarkBlock);
-        //doSimulation();
-    } else {
-        cerr << "No mining mode selected!" << std::endl;
-        exit(1);
+    switch (m_mode) {
+        case OperationMode::Benchmark:
+            //doBenchmark(m_minerExecutionMode, m_benchmarkWarmup, m_benchmarkTrial, m_benchmarkTrials);
+            break;
+        case OperationMode::GBT:
+        case OperationMode::Stratum:
+        case OperationMode::Simulation:
+            doMiner();
+            break;
+        default:
+            std::cerr << std::endl << "Program logic error" << "\n\n";
+            std::exit(1);
     }
-}
-
-void MinerCLI::doSimulation(int difficulty)
-{
 }
 
 void MinerCLI::doMiner()
@@ -468,6 +468,10 @@ void MinerCLI::doMiner()
 			client = new GetworkClient(m_farmRecheckPeriod, m_coinbase_addr);
     } else if (m_mode == OperationMode::Stratum) {
         client = new StratumClient(m_io_service, m_worktimeout, m_responsetimeout, m_email, m_report_stratum_hashrate);
+    } else if (m_mode == OperationMode::Simulation) {
+        //client = new SimulationClient(20, m_benchmarkBlock);
+        std::cout << "Selected simulation mode" << std::endl;
+        return;
     } else {
         cwarn << "Inwalid OperationMode";
         std::exit(1);
