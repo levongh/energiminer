@@ -85,14 +85,16 @@ public:
 
 private:
     void trun() override;
-    void onSetWork() override {}
+    void onSetWork() override;
 
     bool init_dag(uint32_t height);
 
     cl::Context m_context;
-    cl::CommandQueue m_queue;
+    std::vector<cl::CommandQueue> m_queue;
+    std::vector<cl::CommandQueue> m_abortqueue;
     cl::Kernel m_searchKernel;
     cl::Kernel m_dagKernel;
+    cl::Device m_device;
 
     std::vector<cl::Buffer> m_dag;
     std::vector<cl::Buffer> m_light;

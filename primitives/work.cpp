@@ -20,6 +20,11 @@ Work::Work(const Json::Value& gbt,
     , m_extraNonce(extraNonce)
 {
     m_jobName = gbt.get((Json::Value::ArrayIndex)0, "").asString();
+    try {
+        startNonce = std::strtol(m_extraNonce.c_str(), nullptr, 16);
+    } catch (const std::invalid_argument& err) {
+        startNonce = 0;
+    }
     hashTarget = arith_uint256().SetCompact(this->nBits);
 }
 

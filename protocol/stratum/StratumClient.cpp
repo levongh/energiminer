@@ -507,9 +507,6 @@ void StratumClient::processExtranonce(std::string& enonce)
 
     cnote << "Extranonce set to " + enonce;
 
-    for (int i = enonce.length(); i < 16; ++i) {
-        enonce += "0";
-    }
     m_extraNonce = enonce;
 }
 
