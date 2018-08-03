@@ -527,8 +527,9 @@ void OpenCLMiner::trun()
             }
             current.startNonce = startNonce;
             // Increase start nonce for following kernel execution.
-            startNonce += m_globalWorkSize * results.hashCount;
-            addHashCount(m_globalWorkSize * results.hashCount);
+            uint64_t amount = static_cast<uint64_t>(m_globalWorkSize) * static_cast<uint64_t>(results.hashCount);
+            startNonce += amount;
+            addHashCount(amount);
         }
         m_queue[0].finish();
     } catch (cl::Error const& _e) {

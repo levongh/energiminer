@@ -140,7 +140,7 @@ void Miner::InitDAG(uint64_t blockHeight, nrghash::progress_callback_type callba
         ss << std::hex << std::setw(4) << std::setfill('0') << epoch << "-" << seedhash.substr(0, 12) << ".dag";
         auto const epoch_file = GetDataDir() / "dag" / ss.str();
 
-        printf("\nDAG file for epoch %lu is \"%s\"", epoch, epoch_file.string().c_str());
+        printf("\nDAG file for epoch %llu is \"%s\"", epoch, epoch_file.string().c_str());
         // try to load the DAG from disk
         try {
             std::unique_ptr<dag_t> new_dag(new dag_t(epoch_file.string(), callback));
@@ -159,7 +159,7 @@ void Miner::InitDAG(uint64_t blockHeight, nrghash::progress_callback_type callba
             ActiveDAG(move(new_dag));
             printf("\nDAG generated successfully. Saved to \"%s\".\n", epoch_file.string().c_str());
         } catch (hash_exception const & e) {
-            printf("\nDAG for epoch %lu could not be generated: %s", epoch, e.what());
+            printf("\nDAG for epoch %llu could not be generated: %s", epoch, e.what());
         }
     }
     printf("\nDAG has been initialized already. Use ActiveDAG() to swap.\n");

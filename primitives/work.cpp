@@ -24,6 +24,7 @@ Work::Work(const Json::Value& gbt,
         startNonce = std::strtol(m_extraNonce.c_str(), nullptr, 16);
     } catch (const std::invalid_argument& err) {
         startNonce = 0;
+        std::cout << "Could not set start noce " << err.what();
     }
     hashTarget = arith_uint256().SetCompact(this->nBits);
 }
