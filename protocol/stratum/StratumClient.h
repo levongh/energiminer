@@ -51,7 +51,7 @@ private:
     void response_timeout_handler(const boost::system::error_code& ec);
 
     void reset_work_timeout();
-    void processReponse(Json::Value& responseObject);
+    void processResponse(Json::Value& responseObject);
     std::string processError(Json::Value& erroresponseObject);
     void processExtranonce(std::string& enonce);
 

@@ -13,10 +13,15 @@ class PoolClient
 public:
     virtual ~PoolClient() noexcept = default;
 
-    void setConnection(URI &conn)
+    void setConnection(URI *conn)
     {
-        m_conn = &conn;
+        m_conn = conn;
         m_canconnect.store(false, std::memory_order_relaxed);
+    }
+
+    void unsetConnection()
+    {
+        m_conn = nullptr;
     }
 
     virtual void connect() = 0;

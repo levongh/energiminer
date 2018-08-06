@@ -53,7 +53,7 @@ void MinerCLI::ParseCommandLine(int argc, char** argv)
     app.add_option("--farm-retries", m_maxFarmRetries,
             "Set number of reconnection retries", true)
         ->group(CommonGroup)
-        ->check(CLI::Range(1, 99999));
+        ->check(CLI::Range(0, 99999));
 
     app.add_option("--stratum-email", m_email,
             "Set email address for eth-proxy")

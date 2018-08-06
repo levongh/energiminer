@@ -427,12 +427,12 @@ void OpenCLMiner::trun()
     Work current; // Here we need current work as to initialize gpu
     try {
         // Read results.
-        volatile SearchResults results;
         while (!shouldStop()) {
             if (is_mining_paused()) {
                 std::this_thread::sleep_for(std::chrono::seconds(3));
                 continue;
             }
+            volatile SearchResults results;
             const Work& work = this->getWork(); // This work is a copy of last assigned work the worker was provided by plant
             if ( !work.isValid() ) {
                 cnote << "No work received. Pause for 3 s.";
@@ -493,7 +493,7 @@ void OpenCLMiner::trun()
                     m_searchKernel, cl::NullRange, m_globalWorkSize, m_workgroupSize);
             if (m_queue.size()) {
                 m_queue[0].enqueueReadBuffer(m_searchBuffer[0], CL_TRUE,
-                        c_maxSearchResults * sizeof(results.rslt[0]), 3 * sizeof(results.count),
+                        c_maxSearchResults * sizeof(results.rslt[0]), 2 * sizeof(results.count),
                         (void*)&results.count);
                 if (results.count) {
                     m_queue[0].enqueueReadBuffer(m_searchBuffer[0], CL_TRUE, 0,
@@ -502,6 +502,8 @@ void OpenCLMiner::trun()
                 }
                 m_queue[0].enqueueWriteBuffer(m_searchBuffer[0], CL_FALSE,
                         offsetof(SearchResults, count), sizeof(zerox3), zerox3);
+            } else {
+                results.count = 0;
             }
 
 
@@ -509,19 +511,22 @@ void OpenCLMiner::trun()
             // It takes some time because proof of work must be re-evaluated on CPU.
             for (uint32_t i = 0; i < results.count; ++i) {
                 current.nNonce = startNonce + results.rslt[i].gid;
-                auto const powHash = GetPOWHash(current);
-                if (s_noeval) {
-                    Solution solution(current, current.getSecondaryExtraNonce());
-                    m_plant.submitProof(solution);
-                    break;
-                } else {
-                    if (UintToArith256(powHash) <= current.hashTarget) {
-                        cllog << name() << "Submitting block blockhash: " << current.GetHash().ToString() << " height: " << current.nHeight << "nonce: " << current.nNonce;
+                if (current.nNonce != m_lastNonce) {
+                    m_lastNonce = current.nNonce;
+                    if (s_noeval) {
                         Solution solution(current, current.getSecondaryExtraNonce());
                         m_plant.submitProof(solution);
                         break;
                     } else {
-                        cwarn << name() << "CL Miner proposed invalid solution" << current.GetHash().ToString() << "nonce: " << current.nNonce;
+                        auto const powHash = GetPOWHash(current);
+                        if (UintToArith256(powHash) <= current.hashTarget) {
+                            cllog << name() << "Submitting block blockhash: " << current.GetHash().ToString() << " height: " << current.nHeight << "nonce: " << current.nNonce;
+                            Solution solution(current, current.getSecondaryExtraNonce());
+                            m_plant.submitProof(solution);
+                            break;
+                        } else {
+                            cwarn << name() << "CL Miner proposed invalid solution" << current.GetHash().ToString() << "nonce: " << current.nNonce;
+                        }
                     }
                 }
             }
@@ -684,8 +689,13 @@ bool OpenCLMiner::init_dag(uint32_t height)
 
             /* Open kernels/ethash_{devicename}_lws{local_work_size}.bin */
             std::transform(device_name.begin(), device_name.end(), device_name.begin(), ::tolower);
-            fname_strm << boost::dll::program_location().parent_path().string() <<
-                "/kernels/ethash_" << device_name << "_lws" << m_workgroupSize << ".bin";
+            fname_strm << boost::dll::program_location().parent_path().string()
+#if defined(_WIN32)
+                << "\\kernels\\ethash_"
+#else
+                << "/kernels/ethash_"
+#endif
+                << device_name << "_lws" << m_workgroupSize << ".bin";
             cllog << "Loading binary kernel " << fname_strm.str();
             try {
                 kernel_file.open(fname_strm.str(), std::ios::in | std::ios::binary);

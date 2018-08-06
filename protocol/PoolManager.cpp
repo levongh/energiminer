@@ -24,8 +24,8 @@ PoolManager::PoolManager(boost::asio::io_service& io_service,
 	p_client->onConnected([&]()
 	{
         m_connectionAttempt = 0;
-        m_activeConnectionHost = m_connections[m_activeConnectionIdx].Host();
-        cnote << "Connected to " << m_connections[m_activeConnectionIdx].Host() << p_client->ActiveEndPoint();
+        m_activeConnectionHost = m_connections.at(m_activeConnectionIdx).Host();
+        cnote << "Connected to " << m_connections.at(m_activeConnectionIdx).Host() << p_client->ActiveEndPoint();
         // Rough implementation to return to primary pool
         // after specified amount of time
         if (m_activeConnectionIdx != 0 && m_failoverTimeout > 0) {
@@ -59,7 +59,7 @@ PoolManager::PoolManager(boost::asio::io_service& io_service,
 		auto ms = duration_cast<milliseconds>(steady_clock::now() - m_submit_time);
 		std::stringstream ss;
 		ss << std::setw(4) << std::setfill(' ') << ms.count();
-		ss << "ms." << "   " << m_connections[m_activeConnectionIdx].Host() + p_client->ActiveEndPoint();
+        ss << "ms." << "   " << m_connections.at(m_activeConnectionIdx).Host() + p_client->ActiveEndPoint();
 		cnote << EthLime "**Accepted" EthReset << (stale ? "(stale)" : "") << ss.str();
 		m_farm.acceptedSolution(stale);
 	});
@@ -125,8 +125,28 @@ void PoolManager::trun()
         if (!p_client->isPendingState()) {
             if (!p_client->isConnected()) {
                 // If this connection is marked Unrecoverable then discard it
-                if (m_connections[m_activeConnectionIdx].IsUnrecoverable()) {
-                    m_connections.erase(m_connections.begin() + m_activeConnectionIdx);
+                if (m_connections.at(m_activeConnectionIdx).IsUnrecoverable()) {
+
+                    p_client->unsetConnection();
+
+                    /*
+                    This should be a one line code but it always ends up
+                    with undefined behavior. Only solution found is to make a
+                    copy. Any hint about why erase does not work ... is welcome
+                    */
+                    // m_connections.erase(m_connections.begin() + m_activeConnectionIdx);
+
+                    std::vector<URI> m_connections_copy;
+                    for (unsigned i = 0; i < m_connections.size(); i++) {
+                        if (!m_connections[i].IsUnrecoverable()) {
+                            m_connections_copy.push_back(m_connections.at(i));
+                        }
+                    }
+                    m_connections.clear();
+                    for (unsigned i = 0; i < m_connections_copy.size(); i++) {
+                        m_connections.push_back(m_connections_copy.at(i));
+                    }
+
                     m_connectionAttempt = 0;
                     if (m_activeConnectionIdx > 0) {
                         m_activeConnectionIdx--;
@@ -151,14 +171,15 @@ void PoolManager::trun()
                         }
                     }
                 }
-                if (m_connections[m_activeConnectionIdx].Host() != "exit"  && m_connections.size() > 0) {
+
+				if (m_connections.at(m_activeConnectionIdx).Host() != "exit" && m_connections.size() > 0) {
                     // Count connectionAttempts
                     m_connectionAttempt++;
 
                     // Invoke connections
-                    p_client->setConnection(m_connections[m_activeConnectionIdx]);
-                    m_farm.set_pool_addresses(m_connections[m_activeConnectionIdx].Host(), m_connections[m_activeConnectionIdx].Port());
-                    cnote << "Selected pool" << (m_connections[m_activeConnectionIdx].Host() + ":" + toString(m_connections[m_activeConnectionIdx].Port()));
+					p_client->setConnection(& m_connections.at(m_activeConnectionIdx));
+					m_farm.set_pool_addresses(m_connections.at(m_activeConnectionIdx).Host(), m_connections.at(m_activeConnectionIdx).Port());
+					cnote << "Selected pool " << (m_connections.at(m_activeConnectionIdx).Host() + ":" + toString(m_connections.at(m_activeConnectionIdx).Port()));
                     p_client->connect();
 
                 } else {
