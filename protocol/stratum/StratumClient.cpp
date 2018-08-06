@@ -6,6 +6,31 @@
 #include <wincrypt.h>
 #endif
 
+namespace {
+
+void diffToTarget(uint32_t *target, double diff)
+{
+    uint32_t target2[8];
+    uint64_t m;
+    int k;
+
+    for (k = 6; k > 0 && diff > 1.0; k--)
+        diff /= 4294967296.0;
+    m = (uint64_t)(4294901760.0 / diff);
+    if (m == 0 && k == 6)
+        memset(target2, 0xff, 32);
+    else {
+        memset(target2, 0, 32);
+        target2[k] = (uint32_t)m;
+        target2[k + 1] = (uint32_t)(m >> 32);
+    }
+
+    for (int i = 0; i < 32; i++)
+        ((uint8_t*)target)[i] = ((uint8_t*)target2)[i];
+}
+
+}
+
 using boost::asio::ip::tcp;
 
 StratumClient::StratumClient(boost::asio::io_service & io_service,
@@ -685,7 +710,7 @@ void StratumClient::processResponse(Json::Value& responseObject)
                     return;
                 } else {
                     cnote << "Subscribed to stratum server";
-                    m_nextWorkDifficulty = 1;
+                    m_nextWorkTarget = arith_uint256("0xffff000000000000000000000000000000000000000000000000000000000000");
                     if (!jResult.empty() && jResult.isArray()) {
                         std::string enonce = jResult.get((Json::Value::ArrayIndex)1, "").asString();
                         processExtranonce(enonce);
@@ -815,6 +840,7 @@ void StratumClient::processResponse(Json::Value& responseObject)
                     auto work = energi::Work(jPrm, m_extraNonce, true);
                     if (m_current != work) {
                         m_current = work;
+                        m_current.hashTarget = m_nextWorkTarget;
                         m_current.exSizeBits = m_extraNonceHexSize * 4;
                         if (m_onWorkReceived) {
                             m_onWorkReceived(m_current);
@@ -825,11 +851,12 @@ void StratumClient::processResponse(Json::Value& responseObject)
         } else if (_method == "mining.set_difficulty") {
             jPrm = responseObject.get("params", Json::Value::null);
             if (jPrm.isArray()) {
-                m_nextWorkDifficulty = jPrm.get((Json::Value::ArrayIndex)0, 1).asDouble();
-                if (m_nextWorkDifficulty <= 0.0001) {
-                    m_nextWorkDifficulty = 0.0001;
+                double nextWorkDifficulty = jPrm.get((Json::Value::ArrayIndex)0, 1).asDouble();
+                if (nextWorkDifficulty <= 0.0001) {
+                    nextWorkDifficulty = 0.0001;
                 }
-                cnote << "Difficulty set to"  << m_nextWorkDifficulty;
+                cnote << "Difficulty set to"  << nextWorkDifficulty;
+                diffToTarget((uint32_t*)m_nextWorkTarget.data(), nextWorkDifficulty);
             }
         } else if (_method == "mining.set_extranonce") {
             jPrm = responseObject.get("params", Json::Value::null);
