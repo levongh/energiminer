@@ -101,7 +101,6 @@ private:
 
     double m_nextWorkDifficulty;
 
-    //h64 m_extraNonce;
     std::string m_extraNonce;
     int m_extraNonceHexSize = 0;
 

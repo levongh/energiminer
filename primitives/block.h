@@ -10,7 +10,6 @@
 #include "common/utilstrencodings.h"
 #include "common/serialize.h"
 #include "uint256.h"
-#include "extranoncesingleton.h"
 
 namespace energi {
 
