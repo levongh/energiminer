@@ -539,6 +539,7 @@ void StratumClient::processExtranonce(std::string& enonce)
 
     cnote << "Extranonce set to " + enonce;
 
+    enonce.append(16 - m_extraNonceHexSize, '0');
     m_extraNonce = enonce;
 }
 
