@@ -165,11 +165,11 @@ private:
 
 #if ETH_ETHASHCL
 	unsigned m_openclDeviceCount = 0;
-    std::vector<unsigned> m_openclDevices = std::vector<unsigned>(MAX_MINERS, -1);
-	unsigned m_openclThreadsPerHash = 8;
+    std::vector<unsigned> m_openclDevices;// = std::vector<unsigned>(MAX_MINERS, -1);
+    unsigned m_globalWorkSizeMultiplier = OpenCLMiner::c_defaultGlobalWorkSizeMultiplier;
 
-    int m_globalWorkSizeMultiplier = energi::OpenCLMiner::c_defaultGlobalWorkSizeMultiplier;
 	unsigned m_localWorkSize = energi::OpenCLMiner::c_defaultLocalWorkSize;
+    bool m_noBinary = false;
 #endif
 #if ETH_ETHASHCUDA
 	unsigned m_cudaDeviceCount = 0;

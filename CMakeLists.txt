@@ -54,6 +54,7 @@ cable_set_build_type(DEFAULT Release CONFIGURATION_TYPES Release RelWithDebInfo)
 
 option(ETHASHCL "Build with OpenCL mining" ON)
 option(ETHASHCUDA "Build with CUDA mining" OFF)
+option(BINKERN "Install AMD binary kernels" ON)
 
 # propagates CMake configuration options to the compiler
 function(configureProject)
@@ -63,6 +64,9 @@ function(configureProject)
 	if (ETHASHCUDA)
         add_definitions(-DETH_ETHASHCUDA)
 	endif()
+    if (BINKERN)
+        add_definitions(-DBIN_KERN)
+    endif()
 endfunction()
 
 
@@ -87,6 +91,7 @@ message("-- Build ${CMAKE_BUILD_TYPE} / ${CMAKE_SYSTEM_NAME}")
 message("------------------------------------------------------------- components")
 message("-- ETHASHCL         Build OpenCL components                  ${ETHASHCL}")
 message("-- ETHASHCUDA       Build CUDA components                    ${ETHASHCUDA}")
+message("-- BINKERN          Install AMD binary kernels               ${BINKERN}")
 message("------------------------------------------------------------------------")
 message("")
 
@@ -103,6 +108,9 @@ add_subdirectory(nrgcore)
 
 if (ETHASHCL)
     add_subdirectory(libegihash-cl)
+    if (BINKERN)
+        add_subdirectory(libegihash-cl/kernels)
+    endif()
 endif()
 if (ETHASHCUDA)
     add_subdirectory(libnrghash-cuda)
