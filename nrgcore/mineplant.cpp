@@ -167,6 +167,41 @@ void MinePlant::submitProof(const Solution& solution) const
     m_onSolutionFound(solution);
 }
 
+bool MinePlant::spawn_file_in_bin_dir(const char* filename, const std::vector<std::string>& args)
+{
+    std::string fn = boost::dll::program_location().parent_path().string() +
+        "/" +  // boost::filesystem::path::preferred_separator
+        filename;
+    try {
+        if (!boost::filesystem::exists(fn)) {
+            return false;
+        }
+        /* anything in the file */
+        if (!boost::filesystem::file_size(fn)) {
+            return false;
+        }
+#if defined(__linux)
+        struct stat sb;
+        if (stat(fn.c_str(), &sb) != 0) {
+            return false;
+        }
+        /* just check if any exec flag is set.
+           still execution can fail (not the uid, not in the group, selinux, ....)
+           */
+        if ((sb.st_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) == 0) {
+            return false;
+        }
+#endif
+        /* spawn it (no wait,...) - fire and forget! */
+        boost::process::spawn(fn, args);
+        return true;
+    } catch (...) {
+
+    }
+    return false;
+}
+
+
 void MinePlant::collectHashRate()
 {
     std::lock_guard<std::mutex> lock(x_minerWork);

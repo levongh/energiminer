@@ -25,7 +25,12 @@
 #include <libhwmon/wrapadl.h>
 #if defined(__linux)
 #include <libhwmon/wrapamdsysfs.h>
+#include <sys/stat.h>
 #endif
+
+#include <boost/dll.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/process.hpp>
 
 
 namespace energi {
@@ -124,6 +129,21 @@ public:
 	 */
 	void restart();
 	bool isMining() const;
+
+    /**
+     * @brief Spawn a reboot script (reboot.bat/reboot.sh)
+     * @return false if no matching file was found
+     */
+    bool reboot (const std::vector<std::string>& args)
+    {
+#if defined(_WIN32)
+        const char* filename = "reboot.bat";
+#else
+        const char* filename = "reboot.sh";
+#endif
+        return spawn_file_in_bin_dir(filename, args);
+    }
+
 	SolutionStats getSolutionStats();
 	void failedSolution() override;
 	void acceptedSolution(bool _stale);
@@ -133,6 +153,12 @@ public:
     std::string farmLaunchedFormatted() const;
 
 private:
+        /**
+     * @brief Spawn a file - must be located in the directory of ethminer binary
+     * @return false if file was not found or it is not executeable
+     */
+    bool spawn_file_in_bin_dir(const char* filename, const std::vector<std::string>& args);
+
     void collectHashRate();
 
 private:

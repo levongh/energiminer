@@ -289,7 +289,7 @@ struct SearchResults
 
 void OpenCLMiner::onSetWork()
 {
-    static const uint32_t one = 1;
+    const uint32_t one = 1;
     if (m_abortqueue.size())
         m_abortqueue[0].enqueueWriteBuffer(
                 m_searchBuffer[0], CL_TRUE, offsetof(SearchResults, abort), sizeof(one), &one);
@@ -419,7 +419,7 @@ void OpenCLMiner::trun()
 {
     setThreadName("OpenCL");
     // Memory for zero-ing buffers. Cannot be static because crashes on macOS.
-    uint32_t const static zerox3[3] = {0, 0, 0};
+    uint32_t zerox3[3] = {0, 0, 0};
     uint64_t startNonce = 0;
     // this gives each miner a pretty big range of nonces, supporting up to 16 miners.
     // TODO: get smarter about how many miners we support.

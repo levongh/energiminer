@@ -473,7 +473,7 @@ void MinerCLI::doMiner()
         std::cout << "Selected simulation mode" << std::endl;
         return;
     } else {
-        cwarn << "Inwalid OperationMode";
+        cwarn << "Invalid OperationMode";
         std::exit(1);
     }
     if (client == nullptr) {

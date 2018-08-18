@@ -56,23 +56,6 @@ public:
 		);
 	static void setNumInstances(unsigned _instances);
 	static void setDevices(const std::vector<unsigned>& _devices, unsigned _selectedDeviceCount);
-	static bool cuda_configureGPU(
-		size_t numDevices,
-		const std::vector<int>& _devices,
-		unsigned _blockSize,
-		unsigned _gridSize,
-		unsigned _numStreams,
-		unsigned _scheduleFlag,
-		bool _noeval
-		);
-
-	bool cuda_init(
-		size_t numDevices,
-		uint32_t height,
-		unsigned _deviceId,
-		bool _cpyToHost,
-		uint8_t * &hostDAG,
-		unsigned dagCreateDevice);
 
 	void search(
 		uint8_t const* header,
