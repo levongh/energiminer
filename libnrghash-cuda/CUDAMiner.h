@@ -65,7 +65,7 @@ public:
 		unsigned _scheduleFlag,
 		bool _noeval
 		);
-
+///TODO
 	bool cuda_init(
 		size_t numDevices,
 		uint32_t height,
@@ -98,15 +98,14 @@ private:
 
     bool init_dag(uint32_t height);
 
-
     ///Constants on GPU
     hash128_t* m_dag = nullptr;
     std::vector<hash64_t*> m_light;
     uint32_t m_dag_size = 0;
     uint32_t m_device_num = 0;
 
-    volatile search_results** m_search_buf = nullptr;
-    cudaStream_t* m_streams = nullptr;
+    std::vector<volatile Search_results*> m_search_buf;
+    std::vector<cudaStream_t> m_streams;
 	uint64_t m_current_target = 0;
 
     uint16_t m_searchPasses = 0;

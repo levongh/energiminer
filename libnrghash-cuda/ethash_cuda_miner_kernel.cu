@@ -3,7 +3,6 @@
 * based on Tim Hughes' opencl kernel.
 * thanks to sp_, trpuvot, djm34, cbuchner for things i took from ccminer.
 */
-
 #include "ethash_cuda_miner_kernel.h"
 #include "ethash_cuda_miner_kernel_globals.h"
 #include "cuda_helper.h"
@@ -16,9 +15,9 @@
 #include "dagger_shuffled.cuh"
 
 template <uint32_t _PARALLEL_HASH>
-__global__ void
+__global__ void 
 ethash_search(
-	volatile search_results* g_output,
+	volatile Search_results* g_output,
 	uint64_t start_nonce
 	)
 {
@@ -27,7 +26,7 @@ ethash_search(
         if (compute_hash<_PARALLEL_HASH>(start_nonce + gid, d_target, mix))
 		return;
 	uint32_t index = atomicInc((uint32_t *)&g_output->count, 0xffffffff);
-	if (index >= SEARCH_RESULTS)
+	if (index >= MAX_SEARCH_RESULTS)
 		return;
 	g_output->result[index].gid = gid;
 	g_output->result[index].mix[0] = mix[0].x;
@@ -44,7 +43,7 @@ void run_ethash_search(
 	uint32_t gridSize,
 	uint32_t blockSize,
 	cudaStream_t stream,
-	volatile search_results* g_output,
+	volatile Search_results* g_output,
 	uint64_t start_nonce,
 	uint32_t parallelHash
 )
